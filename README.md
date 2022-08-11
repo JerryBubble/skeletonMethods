@@ -38,6 +38,7 @@ For the next step we segment knots into groups based on a linkage criterion (sin
 Finally, we choose a threshold that cuts the dendrogram into $S = 2$ clusters (panel (f))
 and assign cluster label to each observation according to the knot-cluster that it belongs to (panel (g)).
 
+### Check out [this page](https://cse512-22sp.pages.cs.washington.edu/SkeletonVis/) for animations on the skeleton framework.
 
 
 ## Code Example for Clustering
