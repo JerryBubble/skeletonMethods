@@ -111,8 +111,8 @@ FInally we can get a plot to visualize the clustering result:
 ## Description of Regression Framework
 Like in the skeleton clustering framework, for regression puporse we also first construct a skeleton graph to represent the covariates. Particularly, for regression we use the density-aided similarity measure called Voronoi density to help cut skeleton if needed, and such construction can be done with the function `voronSkeleton`. Then we project the data covariates onto the skeleton graph with function `skelProject` and compute the skeleton-based distances between them with function `dskeleton`. Then we implement different non-parametric regression techiniques on the skeleton graph:
 ### Skeleton Kernel Regression
-Let $K_h(.) = K(./h)$ be a non-negative kernel function with bandwidth $h > 0$, let $d_{\mathcal S} and let $s_1, \dots, s_n$ denote the skeleton-projected covariates. the corresponding skeleton-based kernel (S-kernel) regressor for a point $s$ is
-$$\hat{m}(s) = \frac{\sum_{j=1}^N K_h(d_{\mathcal S}(s_j, s)) Y_j}{\sum_{j=1}^N K_h(d_{\mathcal S}(s_j, s))} $$
+Let $K_h(.) = K(./h)$ be a non-negative kernel function with bandwidth $h > 0$, let $d_{\mathcal S}(,)$ denotes the skeleton-based distance and let $s_1, \dots, s_n$ denote the skeleton-projected covariates. the corresponding skeleton-based kernel (S-kernel) regressor for a point $s$ is
+$$\hat{m}(s) = \frac{\Sigma_{j=1}^N K_h(d_{\mathcal S}(s_j, s)) Y_j}{\Sigma_{j=1}^N K_h(d_{\mathcal S}(s_j, s))} $$
 An example kernel function  is the Gaussian kernel that
 $$K_h(d_{\mathcal S}(s_j, s_\ell)) = \exp\left(- \frac{d_{\mathcal S}(s_j, s_\ell)^2}{h^2}\right)$$
 and the function `skelKernel` fits this regressor.
