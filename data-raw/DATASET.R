@@ -17,3 +17,12 @@ usethis::use_data(MixStar1000, overwrite = TRUE)
 
 ManifoldMix1000 = MM_data(d = 1000)
 usethis::use_data(ManifoldMix1000, overwrite = TRUE)
+
+SwissRollReg100 = SwissRollReg(d = 100)
+usethis::use_data(SwissRollReg100, overwrite = TRUE)
+
+YinyangReg100 = Yinyang_reg_data(d=100)
+usethis::use_data(YinyangReg100, overwrite = TRUE)
+
+NoiseYinyangReg100 = NoiseYinyang_reg_data(d=100)
+usethis::use_data(NoiseYinyangReg100, overwrite = TRUE)

@@ -26,7 +26,7 @@ vectorized_pdist <- function(A,B){
 }
 
 
-#' Construct the skeleton representation of a dataset
+#' Construct the knots and edges for the skeleton representation of a dataset
 #'
 #' @param data a matrix/dataframe of data points.
 #' @param centers an optional matrix/dataframe of the knots in the skeleton representation.
@@ -36,6 +36,7 @@ vectorized_pdist <- function(A,B){
 #' @param wedge a character or a vector of characters indicating the types of edge measure weights to include.
 #' Can take 'all', 'none', 'voronoi', 'face', 'frustum', 'avedist'.
 #' @param h a number for the bandwidth when using KDE to calculate Face or Frustum density.
+#' @param hadj a number adjusting the rate of bandwidth with sample size
 #' @param kernel a character string giving the smoothing kernel to be used in KDE. Same as in the density function. This must partially match one of "gaussian", "rectangular", "triangular", "epanechnikov", "biweight", "cosine" or "optcosine", with default "gaussian", and may be abbreviated to a unique prefix.
 #' @param R0 a number indicating the disk radius for Frustum density
 #' @param idx_frustum  logical; if TRUE, use same disk radius for different pairs of knots. If FALSE, use different within cluster variance as radius
@@ -108,7 +109,7 @@ skeletonCons = function(data, centers=NULL, labels=NULL,
     X_km = stats::kmeans(as.matrix(X0), center=k, nstart = rep)
     centers = X_km$centers
     labels = X_km$cluster
-  }else if(is.null(labels)){#centers provided but not labels
+  }else if(is.null(labels)&(!is.null(centers))){#centers provided but not labels
     centers = as.matrix(centers)
     labels = RANN::nn2(centers, X0, k=1)$nn.idx[,1]
     k = nrow(centers)
@@ -119,7 +120,7 @@ skeletonCons = function(data, centers=NULL, labels=NULL,
     X_km$k = k
     X_km$withinss = withinss
     X_km$size = as.numeric(table(labels))
-  }else if(is.null(centers)){#labels provided but not centers
+  }else if(is.null(centers)&(!is.null(labels))){#labels provided but not centers
     k = sum(table(labels) >3)
     centers = matrix(nrow = k, ncol = d)
     withinss = numeric(k)
@@ -192,7 +193,7 @@ skeletonCons = function(data, centers=NULL, labels=NULL,
       idx_frustum = F
     }else{#catch bad cases
       print('wrong R0 specified, use default')
-      R_cluster = sqrt(X_km$withinss/(x_km$size-1))
+      R_cluster = sqrt(X_km$withinss/(X_km$size-1))
       R0 = mean(R_cluster)
       R0_lv = rep(R0, k)
       idx_frustum = T
@@ -202,6 +203,7 @@ skeletonCons = function(data, centers=NULL, labels=NULL,
 
 
   X_nn = RANN::nn2(centers, X0, k=2) #2-nearest neighbor calculation
+  output$nn = X_nn$nn.idx
 
   for(i in 1:(m-1)){
     center1 = centers[i,]

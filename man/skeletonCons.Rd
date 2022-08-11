@@ -2,7 +2,7 @@
 % Please edit documentation in R/skeletonCons.R
 \name{skeletonCons}
 \alias{skeletonCons}
-\title{Construct the skeleton representation of a dataset}
+\title{Construct the knots and edges for the skeleton representation of a dataset}
 \usage{
 skeletonCons(
   data,
@@ -34,6 +34,8 @@ Can take 'all', 'none', 'voronoi', 'face', 'frustum', 'avedist'.}
 
 \item{h}{a number for the bandwidth when using KDE to calculate Face or Frustum density.}
 
+\item{hadj}{a number adjusting the rate of bandwidth with sample size}
+
 \item{kernel}{a character string giving the smoothing kernel to be used in KDE. Same as in the density function. This must partially match one of "gaussian", "rectangular", "triangular", "epanechnikov", "biweight", "cosine" or "optcosine", with default "gaussian", and may be abbreviated to a unique prefix.}
 
 \item{R0}{a number indicating the disk radius for Frustum density}
@@ -55,7 +57,7 @@ A list with following components:
 }
 }
 \description{
-Construct the skeleton representation of a dataset
+Construct the knots and edges for the skeleton representation of a dataset
 }
 \examples{
 ###create ring data

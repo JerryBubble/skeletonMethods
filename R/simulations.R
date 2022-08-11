@@ -269,18 +269,21 @@ MM_data = function(n1=800,n2=400,n3=2000,sd1=0.04,sd2=0.04,sd3=0.04, d=3, sd_hig
 #' @param sd_e a number indicating the standard deviation for the additive Gaussian noises in the response
 #' @return A list of generated data points and the true labels
 #' \itemize{
-#'   \item data - The generated data matrix
-#'   \item clus - The vector of true cluster labels for each data point
+#'   \item data - The generated data covariate matrix
+#'   \item Y - The vector of generated response for each covariate
+#'   \item trueY - The vector of generated response without randomness
+#'   \item angles - The angle corresponding to each covariate
+#'   \item heights- The height of each corresponding covariate
 #' }
 #' @export
 #' @examples
-#' X = MM_data()$data
+#' X = SwissRollReg()$data
 SwissRollReg <- function(N=2000, Height=4*pi,start = pi, roll=1, d = 3, sd_high=0.1, sd_e = 0.3){
 
   ## build manifold
   c = log((start + 2*pi*roll)/start) #need start > 0
-  p = start * exp(c *runif(N, 0, 1))
-  y = Height * runif(N, 0 , 1)
+  p = start * exp(c *stats::runif(N, 0, 1))
+  y = Height * stats::runif(N, 0 , 1)
   X = cbind(p * cos(p), y, p * sin(p))
   X = scale(X)
 
@@ -293,9 +296,10 @@ SwissRollReg <- function(N=2000, Height=4*pi,start = pi, roll=1, d = 3, sd_high=
     X0 = cbind(X, matrix(stats::rnorm(d_add*(n),  sd = sd_high), nrow = n))
   }
   p0 = p - start -  pi * roll
-  Y0 = 0.1*p0^3*( (y<pi) + (y > 2*pi & y<3*pi) ) + rnorm(N, mean = 0, sd = sd_e)
+  response =  0.1*p0^3*( (y<pi) + (y > 2*pi & y<3*pi) )
+  Y0 = response + stats::rnorm(N, mean = 0, sd = sd_e)
 
-  return(list(data = X0, Y = Y0, angles = p, heights = y))
+  return(list(data = X0, Y = Y0, trueY = response, angles = p, heights = y))
 
 }
 
@@ -310,10 +314,11 @@ SwissRollReg <- function(N=2000, Height=4*pi,start = pi, roll=1, d = 3, sd_high=
 #' @param sd_r the standard deviation of shifts for points in the outer ring
 #' @param d a number indicating the dimension of the generated data. d>2 dimensions are filled with independent Gaussian noises
 #' @param sd_high a number indicating the standard deviation for Gaussian noises in the higher dimensions
+#' @param sd_e a number indicating the standard deviation for the additive Gaussian noises in the response
 #' @return A list of generated data points and the true labels
 #' \itemize{
-#'   \item data - The generated data matrix
-#'   \item clus - The vector of true cluster labels for each data point
+#'   \item data - The generated data covariate matrix
+#'   \item Y - The generated responses for the covariates
 #' }
 #' @export
 #' @examples
@@ -342,28 +347,30 @@ Yinyang_reg_data = function(n_m=400,n_c=200,n_r=2000,sd_c=0.1,sd_r=0.1, d=2, sd_
     d_add = d-2
     X0 = cbind(X, matrix(stats::rnorm(d_add*(n),  sd = sd_high), nrow = n))
   }
-  Y0 = c(X_m$clusters, rep(0,n_c), rep(3,n_c), Y_r) + rnorm(nrow(X_m$data)+2*n_c+n_r, mean = 0, sd = sd_e)
+  Y0 = c(X_m$clusters, rep(0,n_c), rep(3,n_c), Y_r) + stats::rnorm(nrow(X_m$data)+2*n_c+n_r, mean = 0, sd = sd_e)
   return(list(data = X0, Y = Y0))
 
 }
 
 #' Generating Yinyang regression data
 #'
+#' @param nnoise number of noisy points to add
 #' @param n_m number of points in each of the two moon shapes. Positive integer value or vector with length=2
 #' @param n_c number of points in each of the two small circles
 #' @param n_r number of points in the outer ring
 #' @param sd_c the standard deviation of shifts for points in the two small circles
 #' @param sd_r the standard deviation of shifts for points in the outer ring
+#' @param sd_e a number indicating the standard deviation for the additive Gaussian noises in the response
 #' @param d a number indicating the dimension of the generated data. d>2 dimensions are filled with independent Gaussian noises
 #' @param sd_high a number indicating the standard deviation for Gaussian noises in the higher dimensions
 #' @return A list of generated data points and the true labels
 #' \itemize{
-#'   \item data - The generated data matrix
-#'   \item clus - The vector of true cluster labels for each data point
+#'   \item data - The generated data covariate matrix
+#'   \item Y - The generated responses for the covariates
 #' }
 #' @export
 #' @examples
-#' X = Yinyang_data()$data
+#' X = NoiseYinyang_reg_data()$data
 #' plot(X[,1], X[,2])
 NoiseYinyang_reg_data = function(nnoise = 800, n_m=400,n_c=200,n_r=2000,sd_c=0.1,sd_r=0.1, d=2, sd_high=0.1, sd_e = 0.1){
 
@@ -390,7 +397,7 @@ NoiseYinyang_reg_data = function(nnoise = 800, n_m=400,n_c=200,n_r=2000,sd_c=0.1
     d_add = d-2
     X0 = cbind(X, matrix(stats::rnorm(d_add*(n),  sd = sd_high), nrow = n))
   }
-  Y0 = c(X_m$clusters, rep(0,n_c), rep(3,n_c), Y_r, rep(1.5,nnoise)) + rnorm(nrow(X_m$data)+2*n_c+n_r+nnoise, mean = 0, sd = sd_e)
+  Y0 = c(X_m$clusters, rep(0,n_c), rep(3,n_c), Y_r, rep(1.5,nnoise)) + stats::rnorm(nrow(X_m$data)+2*n_c+n_r+nnoise, mean = 0, sd = sd_e)
   return(list(data = X0, Y = Y0))
 
 }
