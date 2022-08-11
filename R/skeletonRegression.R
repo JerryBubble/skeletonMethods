@@ -549,6 +549,14 @@ skelCubic = function(newnn, newpx, px,trainY, skeleton){
 #' \describe{
 #'   \item{SEE}{A list recording the Sum of Squared Errors of the tested methods.}
 #'   \item{fits}{A list of vectors recording the predicted values of the data points by different methods.}
+#' } and the methods are named as
+#' \describe{
+#'   \item{Skernel_adpt}{S-kernel regression with adaptive bandwidth.}
+#'   \item{Skernel}{S-kernel regression with global bandwidth.}
+#'   \item{SkNN}{S-kNN regression.}
+#'   \item{SLspline}{S-Lspline regression.}
+#'   \item{SQspline}{S-Qspline regression.}
+#'   \item{SCspline}{S-Cspline regression.}
 #' }
 #' @export
 #' @examples
@@ -727,19 +735,19 @@ skelReg_runAllCV = function(X0,Y0, seed = NULL, nfold = 5,
   names(skelSSE2)[1] = "bandrate"
   skelknnSSE = as.data.frame(skelnnResults) %>% dplyr::group_by(V2) %>% dplyr::summarise(skelknnSSE = sum(V1))
   names(skelknnSSE)[1] = "nneighbor"
-  SSEresults = list(skelSSE= as.data.frame(skelSSE),
-                    skelSSE2= as.data.frame(skelSSE2),
-                    skelknnSSE=as.data.frame(skelknnSSE),
-                    lsplineSSE = sum(lsplineResults[,1]),
-                    qsplineSSE = sum(qsplineResults[,1]),
-                    csplineSSE = sum(csplineResults[,1])
+  SSEresults = list(Skernel_adpt= as.data.frame(skelSSE),
+                    Skernel= as.data.frame(skelSSE2),
+                    SkNN=as.data.frame(skelknnSSE),
+                    SLspline = sum(lsplineResults[,1]),
+                    SQspline = sum(qsplineResults[,1]),
+                    SCspline = sum(csplineResults[,1])
   )
-  fits = list(skelpred= skelpred,
-              skelpred2= skelpred2,
-              skelnnpred= skelnnpred,
-              lsplinefit= lsplinefit,
-              qsplinefit= qsplinefit,
-              csplinefit= csplinefit
+  fits = list(Skernel_adpt= skelpred,
+              Skernel= skelpred2,
+              SkNN= skelnnpred,
+              SLspline= lmpred,
+              SQspline= lmpred2,
+              SCspline= lmpred3
   )
   return(list(SSE = SSEresults, fits = fits))
 }
@@ -756,9 +764,14 @@ skelReg_runAllCV = function(X0,Y0, seed = NULL, nfold = 5,
 #' @param numknots the number of knots to use for skeleton representation.
 #' @param k_cut the number of disconnected components of the resulting skeleton graph.
 #' @param rep number of repetitions for k-Means during skeleton construction process.
-#' @return A list with following components:
+#' @return A list of vectors recording the predicted values of the test data points by different methods.
 #' \describe{
-#'   \item{fits}{A list of vectors recording the predicted values of the data points by different methods.}
+#'   \item{Skernel_adpt}{S-kernel regression with adaptive bandwidth.}
+#'   \item{Skernel}{S-kernel regression with global bandwidth.}
+#'   \item{SkNN}{S-kNN regression.}
+#'   \item{SLspline}{S-Lspline regression.}
+#'   \item{SQspline}{S-Qspline regression.}
+#'   \item{SCspline}{S-Cspline regression.}
 #' }
 #' @export
 #' @examples
@@ -894,12 +907,12 @@ skelReg_runAll = function(trainX,trainY,testX, seed = NULL,
   lmod3 = scubicmodel$model
   lmpred3 = scubicmodel$pred
 
-  fits = list(skelpred= skelpred,
-              skelpred2= skelpred2,
-              skelnnpred= skelnnpred,
-              lsplinefit= lmpred,
-              qsplinefit= lmpred2,
-              csplinefit= lmpred3
+  fits = list(Skernel_adpt= skelpred,
+              Skernel= skelpred2,
+              SkNN= skelnnpred,
+              SLspline= lmpred,
+              SQspline= lmpred2,
+              SCspline= lmpred3
   )
   return(fits)
 }

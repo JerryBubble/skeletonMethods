@@ -125,7 +125,42 @@ and the function `skelKernel` fits this regressor.
 We can use skeleton distances to search for neighbors and implement the classical kNN regression technique. This is implemented in function `skelknn`.
 
 
+
 ## Code Example for Regression
+`skelReg_runAll` function performs prediction on test dataset with all the skeleton-based functions, and users can specify a sequence of parameters for the different methods. For example
+```R
+d = 100 #dimension of covariates
+set.seed(1234)
+data = Yinyang_reg_data(d = d) #simulate the Yinyang Regression data example
+X0  = as.matrix(data$data)
+Y0  = data$Y
+trainID = sample(nrow(X0),nrow(X0)*0.75)
+trainX = X0[trainID,]
+trainY = Y0[trainID]
+testX = X0[-trainID,]
+testY = Y0[-trainID]
+fits = skelReg_runAll(trainX,trainY,testX, seed = NULL,
+                      hrate_seq = c(1,2),
+                      k_seq = seq(3,6, by=3),
+                      numknots=NULL,
+                      k_cut=5,
+                      rep = 1000)
+```
+`skelReg_runAllCV` function performs cross-validation with all the skeleton-based functions, and users can specify a sequence of parameters to test on. For example
+```R
+d = 100 #dimension of covariates
+set.seed(1234)
+traindata = Yinyang_reg_data(d = d) #simulate the Yinyang Regression data example
+X0  = as.matrix(traindata$data)
+Y0  = traindata$Y
+results = skelReg_runAllCV(X0,Y0, seed = NULL, nfold = 2,
+                                    hrate_seq = c(1,2),
+                                    k_seq = c(3,6),
+                                    numknots=NULL,
+                                    k_cut=5,
+                                    rep = 1000)
+```
+In addition to the two wrapper functions that run all the methods together, each step in the regression framework is also implemented and users can run them step-by-step to gain better control over the regression methods. An detailed example run with the steps are presented belwo.
 ```R
 library("skeletonMethods")
 d = 100 #dimension of covariates
