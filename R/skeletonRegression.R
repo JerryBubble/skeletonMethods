@@ -532,3 +532,374 @@ skelCubic = function(newnn, newpx, px,trainY, skeleton){
 
   return(list(trainZ = trainZ, testZ = testZ, model = lmod3, pred = lmpred3))
 }
+
+
+#' Run all the skeleton-based methods with cross-validation on a dataset
+#'
+#' @param X0 a matrix/dataframe of the covariates.
+#' @param Y0 a vector of the responses.
+#' @param seed a random seed for skeleton construction.
+#' @param nfold the number of folds for cross validation
+#' @param hrate_seq a vector of scaling factors for bandwidth used for kernel regression.
+#' @param k_seq a vector of the number of neighbors used for S-knn regressor.
+#' @param numknots the number of knots to use for skeleton representation.
+#' @param k_cut the number of disconnected components of the resulting skeleton graph.
+#' @param rep number of repetitions for k-Means during skeleton construction process.
+#' @return A list with following components:
+#' \describe{
+#'   \item{SEE}{A list recording the Sum of Squared Errors of the tested methods.}
+#'   \item{fits}{A list of vectors recording the predicted values of the data points by different methods.}
+#' }
+#' @export
+#' @examples
+#' \dontrun{
+#' d = 100 #dimension of covariates
+#' set.seed(1234)
+#' traindata = Yinyang_reg_data(d = d) #simulate the Yinyang Regression data example
+#' X0  = as.matrix(traindata$data)
+#' Y0  = traindata$Y
+#' results = skelReg_runAllCV(X0,Y0, seed = NULL, nfold = 5,
+#'                            hrate_seq = c(1,2),
+#'                            k_seq = c(3,6,9,12),
+#'                            numknots=NULL,
+#'                            k_cut=5,
+#'                            rep = 1000)
+#' }
+skelReg_runAllCV = function(X0,Y0, seed = NULL, nfold = 5,
+                            hrate_seq = c(1/8, 1/4,1/2,1,2,4,6, 8,10,12, 14,16),
+                            k_seq = seq(3,36, by=3),
+                            numknots=NULL,
+                            k_cut=1,
+                            rep = 1000
+){
+  #split the data for cross validation
+  if(!is.null(seed)){set.seed(seed)}
+  n = length(Y0)
+  fsplit = c(rep( floor(n/nfold), nfold-1), n - floor(n/nfold)*(nfold-1))
+  folds = split(1:nrow(X0), sample(rep(1:nfold, fsplit)))
+  #choices for number of knots
+  ntrain = nrow(X0)*(nfold-1)/nfold
+  if(is.null(numknots)){ numknots= round(sqrt(ntrain))}
+  ####################
+  #Allocate space for saving results
+  ####################
+  skelResults = matrix(nrow = (nfold*length(hrate_seq)), ncol = 3)#skeleton kernel regression with adaptive bandwidth
+  skelResults2 = matrix(nrow = (nfold*length(hrate_seq)), ncol = 3)#skeleton kernel regression with global bandwidth
+  skelnnResults = matrix(nrow = (nfold*length(k_seq)), ncol = 3)#skeleton kNN regressor
+  lsplineResults = matrix(nrow = nfold, ncol = 2) #skeleton linear spline
+  qsplineResults = matrix(nrow = nfold, ncol = 2) #skeleton quadratic spline
+  csplineResults = matrix(nrow = nfold, ncol = 2) #skeleton cubic spline
+  skelpred = list()
+  for (j in 1:length(hrate_seq)) {
+    skelpred[[j]] = rep(NA,n)
+  }
+  skelpred2 = list()
+  for (j in 1:length(hrate_seq)) {
+    skelpred2[[j]] = rep(NA,n)
+  }
+  skelnnpred = list()
+  for (j in 1:length(k_seq)) {
+    skelnnpred[[j]] = rep(NA,n)
+  }
+  lsplinefit = rep(NA,n)
+  qsplinefit = rep(NA,n)
+  csplinefit = rep(NA,n)
+  ################################################################################
+  #Perform cross validation
+  ################################################################################
+  for(ifold in 1:nfold){
+    testIndexes = folds[[ifold]]
+    testX = X0[testIndexes, ,drop = FALSE]
+    trainX = X0[-testIndexes, ]
+    testY = Y0[testIndexes,drop = FALSE]
+    trainY = Y0[-testIndexes]
+    ######
+    #construct skeleton
+    #####
+    voronSkel = voronSkeleton(trainX,numknots = numknots, k_cut = k_cut, rep=rep, seed=seed)
+    centers = voronSkel$centers
+    labels = voronSkel$labels
+    kdists = voronSkel$kdists
+    edgedists = voronSkel$edgedists
+    g = voronSkel$g
+    nn = voronSkel$nn
+    #####
+    #calculate the projection for training data point
+    ######
+    px = skelProject(nn = nn, X = trainX, skeleton = voronSkel)
+    #####
+    #situate test observations on the graph
+    #####
+    newnn = RANN::nn2(centers, testX, k=2)$nn.idx
+    #calculate the projection for new data points
+    newpx = skelProject(nn = newnn, X = testX, skeleton = voronSkel)
+    #graph distances between test observations and training points
+    testSkeldists = matrix(Inf,nrow = nrow(testX), ncol = nrow(trainX))
+    for (i in 1:nrow(testX)) {
+      #calculate graph distances between new obs and sample points
+      for (j in 1:nrow(trainX)) {
+        if(length(intersect(newnn[i,], nn[j,]))>0){ #only calculate distance between nearby data points
+          testSkeldists[i,j] = dskeleton(nn[j,], newnn[i,], px[j], newpx[i], voronSkel)
+        }
+      }
+    }
+    #######
+    #S-kernel regression with global bandwidth
+    #######
+    #calculate the based bandwidth for cross validation
+    centerband = skelBand(centernn = NULL, px = px, skeleton = voronSkel)
+    testfit_tmp2 = numeric(nrow(testX))
+    for (ihrate in 1:length(hrate_seq)) {
+      hrate_tmp = hrate_seq[ihrate]
+      h1 = centerband*hrate_tmp
+      #regression on test data
+      testfit_tmp2 = skelKernel(h1, testX,testSkeldists, trainY)
+      skelpred2[[ihrate]][testIndexes] = testfit_tmp2
+      skelResults2[(ihrate-1)*nfold+ifold,1] = sum((testfit_tmp2 - testY)^2)
+      skelResults2[(ihrate-1)*nfold+ifold,2] = hrate_tmp
+      skelResults2[(ihrate-1)*nfold+ifold,3] = ifold
+
+    }
+    #######
+    #S-kernel regression with varying bandwidth
+    #######
+    testfit_tmp = numeric(nrow(testX))
+    for (ihrate in 1:length(hrate_seq)) {
+      hrate_tmp = hrate_seq[ihrate]
+      #regression on test data
+      testfit_tmp = skelKerneladopt(hrate_tmp, testX,testSkeldists, trainY)
+      skelpred[[ihrate]][testIndexes] = testfit_tmp
+      skelResults[(ihrate-1)*nfold+ifold,1] = sum((testfit_tmp - testY)^2)
+      skelResults[(ihrate-1)*nfold+ifold,2] = hrate_tmp
+      skelResults[(ihrate-1)*nfold+ifold,3] = ifold
+    }
+    ######
+    #S-kNN regressor, using graph distance for kNN
+    ######
+    gnntestfit_tmp = numeric(nrow(testX))
+    for (ik in 1:length(k_seq)) {
+      k_tmp = k_seq[ik]
+      #fit on test data
+      gnntestfit_tmp = skelknn(k_tmp, testX,testSkeldists, trainY)
+      skelnnpred[[ik]][testIndexes] = gnntestfit_tmp
+      skelnnResults[(ik-1)*nfold+ifold,1] = sum((gnntestfit_tmp - testY)^2)
+      skelnnResults[(ik-1)*nfold+ifold,2] = k_tmp
+      skelnnResults[(ik-1)*nfold+ifold,3] = ifold
+    }
+    ######
+    #linear spline on graph with closed-form solution
+    ######
+    slinearmodel = skelLinear(newnn, newpx,  px, trainY, voronSkel)
+    trainZ = slinearmodel$trainZ  #modified data matrix for training data from projection
+    testZ = slinearmodel$testZ   #modified data matrix for test data from projection
+    lmod = slinearmodel$model #the model
+    lmpred = slinearmodel$pred #the predicted values
+    lsplinefit[testIndexes] =  lmpred
+    lsplineResults[ifold,1] = sum((testY -lmpred)^2)
+    lsplineResults[ifold,2] = ifold
+    ######
+    #quadratic spline on graph with closed-form solution
+    ######
+    squadraticmodel = skelQuadratic(newnn, newpx,  px, trainY, voronSkel)
+    trainZ = squadraticmodel$trainZ
+    testZ = squadraticmodel$testZ
+    lmod2 = squadraticmodel$model
+    lmpred2 = squadraticmodel$pred
+    qsplinefit[testIndexes] =  lmpred2
+    qsplineResults[ifold,1] = sum((testY -lmpred2)^2)
+    ######
+    #cubic spline on general graph with closed-form solution (2p+1 polynomial)
+    ######
+    scubicmodel = skelCubic(newnn, newpx,  px, trainY, voronSkel)
+    trainZ = scubicmodel$trainZ
+    testZ = scubicmodel$testZ
+    lmod3 = scubicmodel$model
+    lmpred3 = scubicmodel$pred
+    csplinefit[testIndexes] =  lmpred3
+    csplineResults[ifold,1] = sum((testY -lmpred3)^2)
+    csplineResults[ifold,2] = ifold
+  }### end cross validation
+  #gather up results over folds
+  `%>%` <- magrittr::`%>%`
+  skelSSE = as.data.frame(skelResults) %>% dplyr::group_by(V2) %>% dplyr::summarise(skelSSE = sum(V1))
+  names(skelSSE)[1] = "bandrate"
+  skelSSE2 = as.data.frame(skelResults2) %>% dplyr::group_by(V2) %>% dplyr::summarise(skelSSE2 = sum(V1))
+  names(skelSSE2)[1] = "bandrate"
+  skelknnSSE = as.data.frame(skelnnResults) %>% dplyr::group_by(V2) %>% dplyr::summarise(skelknnSSE = sum(V1))
+  names(skelknnSSE)[1] = "nneighbor"
+  SSEresults = list(skelSSE= as.data.frame(skelSSE),
+                    skelSSE2= as.data.frame(skelSSE2),
+                    skelknnSSE=as.data.frame(skelknnSSE),
+                    lsplineSSE = sum(lsplineResults[,1]),
+                    qsplineSSE = sum(qsplineResults[,1]),
+                    csplineSSE = sum(csplineResults[,1])
+  )
+  fits = list(skelpred= skelpred,
+              skelpred2= skelpred2,
+              skelnnpred= skelnnpred,
+              lsplinefit= lsplinefit,
+              qsplinefit= qsplinefit,
+              csplinefit= csplinefit
+  )
+  return(list(SSE = SSEresults, fits = fits))
+}
+
+
+#' Run all the skeleton-based methods with training and test datasets
+#'
+#' @param trainX a matrix/dataframe of the training covariates.
+#' @param trainY a vector of the responses on training data.
+#' @param testX a matrix/dataframe of the test covariates.
+#' @param seed a random seed for skeleton construction.
+#' @param hrate_seq a vector of scaling factors for bandwidth used for kernel regression.
+#' @param k_seq a vector of the number of neighbors used for S-knn regressor.
+#' @param numknots the number of knots to use for skeleton representation.
+#' @param k_cut the number of disconnected components of the resulting skeleton graph.
+#' @param rep number of repetitions for k-Means during skeleton construction process.
+#' @return A list with following components:
+#' \describe{
+#'   \item{fits}{A list of vectors recording the predicted values of the data points by different methods.}
+#' }
+#' @export
+#' @examples
+#' \dontrun{
+#' fits = skelReg_runAll(trainX,trainY,testX, seed = NULL,
+#'                       hrate_seq = c(1,2),
+#'                       k_seq = seq(3,6, by=3),
+#'                       numknots=NULL,
+#'                       k_cut=5,
+#'                       rep = 1000)
+#' }
+skelReg_runAll = function(trainX,trainY,testX, seed = NULL,
+                          hrate_seq = c(1/8, 1/4,1/2,1,2,4,6, 8,10,12, 14,16),
+                          k_seq = seq(3,36, by=3),
+                          numknots=NULL,
+                          k_cut=1,
+                          rep = 1000
+){
+  #split the data for cross validation
+  if(!is.null(seed)){set.seed(seed)}
+  n = nrow(testX)
+  #choices for number of knots
+  ntrain = nrow(trainX)
+  if(is.null(numknots)){ numknots= round(sqrt(ntrain))}
+  ####################
+  #Allocate space for saving results
+  ####################
+  skelpred = list()
+  for (j in 1:length(hrate_seq)) {
+    skelpred[[j]] = rep(NA,n)
+  }
+  skelpred2 = list()
+  for (j in 1:length(hrate_seq)) {
+    skelpred2[[j]] = rep(NA,n)
+  }
+  skelnnpred = list()
+  for (j in 1:length(k_seq)) {
+    skelnnpred[[j]] = rep(NA,n)
+  }
+  lsplinefit = rep(NA,n)
+  qsplinefit = rep(NA,n)
+  csplinefit = rep(NA,n)
+  ################################################################################
+  #Perform fitting
+  ################################################################################
+  ######
+  #construct skeleton
+  #####
+  voronSkel = voronSkeleton(trainX,numknots = numknots, k_cut = k_cut, rep=rep, seed=seed)
+  centers = voronSkel$centers
+  labels = voronSkel$labels
+  kdists = voronSkel$kdists
+  edgedists = voronSkel$edgedists
+  g = voronSkel$g
+  nn = voronSkel$nn
+  #####
+  #calculate the projection for training data point
+  ######
+  px = skelProject(nn = nn, X = trainX, skeleton = voronSkel)
+  #####
+  #situate test observations on the graph
+  #####
+  newnn = RANN::nn2(centers, testX, k=2)$nn.idx
+  #calculate the projection for new data points
+  newpx = skelProject(nn = newnn, X = testX, skeleton = voronSkel)
+  #graph distances between test observations and training points
+  testSkeldists = matrix(Inf,nrow = nrow(testX), ncol = nrow(trainX))
+  for (i in 1:nrow(testX)) {
+    #calculate graph distances between new obs and sample points
+    for (j in 1:nrow(trainX)) {
+      if(length(intersect(newnn[i,], nn[j,]))>0){ #only calculate distance between nearby data points
+        testSkeldists[i,j] = dskeleton(nn[j,], newnn[i,], px[j], newpx[i], voronSkel)
+      }
+    }
+  }
+  #######
+  #S-kernel regression with global bandwidth
+  #######
+  #calculate the based bandwidth for cross validation
+  centerband = skelBand(centernn = NULL, px = px, skeleton = voronSkel)
+  testfit_tmp2 = numeric(nrow(testX))
+  for (ihrate in 1:length(hrate_seq)) {
+    hrate_tmp = hrate_seq[ihrate]
+    h1 = centerband*hrate_tmp
+    #regression on test data
+    testfit_tmp2 = skelKernel(h1, testX,testSkeldists, trainY)
+    skelpred2[[ihrate]]= testfit_tmp2
+  }
+  #######
+  #S-kernel regression with varying bandwidth
+  #######
+  testfit_tmp = numeric(nrow(testX))
+  for (ihrate in 1:length(hrate_seq)) {
+    hrate_tmp = hrate_seq[ihrate]
+    #regression on test data
+    testfit_tmp = skelKerneladopt(hrate_tmp, testX,testSkeldists, trainY)
+    skelpred[[ihrate]] = testfit_tmp
+  }
+  ######
+  #S-kNN regressor, using graph distance for kNN
+  ######
+  gnntestfit_tmp = numeric(nrow(testX))
+  for (ik in 1:length(k_seq)) {
+    k_tmp = k_seq[ik]
+    #fit on test data
+    gnntestfit_tmp = skelknn(k_tmp, testX,testSkeldists, trainY)
+    skelnnpred[[ik]] = gnntestfit_tmp
+  }
+  ######
+  #linear spline on graph with closed-form solution
+  ######
+  slinearmodel = skelLinear(newnn, newpx,  px, trainY, voronSkel)
+  trainZ = slinearmodel$trainZ  #modified data matrix for training data from projection
+  testZ = slinearmodel$testZ   #modified data matrix for test data from projection
+  lmod = slinearmodel$model #the model
+  lmpred = slinearmodel$pred #the predicted values
+
+  ######
+  #quadratic spline on graph with closed-form solution
+  ######
+  squadraticmodel = skelQuadratic(newnn, newpx,  px, trainY, voronSkel)
+  trainZ = squadraticmodel$trainZ
+  testZ = squadraticmodel$testZ
+  lmod2 = squadraticmodel$model
+  lmpred2 = squadraticmodel$pred
+
+  ######
+  #cubic spline on general graph with closed-form solution (2p+1 polynomial)
+  ######
+  scubicmodel = skelCubic(newnn, newpx,  px, trainY, voronSkel)
+  trainZ = scubicmodel$trainZ
+  testZ = scubicmodel$testZ
+  lmod3 = scubicmodel$model
+  lmpred3 = scubicmodel$pred
+
+  fits = list(skelpred= skelpred,
+              skelpred2= skelpred2,
+              skelnnpred= skelnnpred,
+              lsplinefit= lmpred,
+              qsplinefit= lmpred2,
+              csplinefit= lmpred3
+  )
+  return(fits)
+}
